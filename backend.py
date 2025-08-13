@@ -15,24 +15,16 @@ load_dotenv()
 Key = os.getenv("api_key")
 client = OpenAI(api_key = Key)
 
-with open("classifier.pkl", "rb") as f:
-    data = pickle.load(f)
-
 with open("kb.pkl", "rb") as f:
     doc_data = pickle.load(f)
 
 doc_index = doc_data["index"]
 doc_chunks = doc_data["documents"]
-clf = data["model"]
-encoder = data["encoder"]
-tag_to_id = data["tag_to_id"]
-id_to_tag = data["id_to_tag"]
-intents = data["intents"]
 
 embed_model = SentenceTransformer("all-MiniLM-L6-v2")
 
 bot_name = "Mato"
-MAX_HISTORY = 6
+MAX_HISTORY = 10
 chat_history = []
 
 base_prompt = """You are the Strategic Business Developer for FastAutomate, creators of the Primius.ai hybrid AI automation platform.
@@ -99,31 +91,15 @@ def format_history(history):
 @app.post("/chat")
 def chat(req: ChatRequest):
     sentence = req.message.lower()
-    X = encoder.encode([sentence])
-    probs = clf.predict_proba(X)[0]
-    pred_id = np.argmax(probs)
-    confidence = probs[pred_id]
-    tag = id_to_tag[pred_id]
-
-    if confidence > 0.95:
-        for intent in intents:
-            if intent["tag"] == tag:
-                bot_reply = np.random.choice(intent["responses"])
-                chat_history.append((sentence, bot_reply))
-                if len(chat_history) > MAX_HISTORY:
-                    chat_history.pop(0)
-                return {"reply": bot_reply}
-
-    # GPT fallback
     query_embedding = embed_model.encode([sentence])
-    D, I = doc_index.search(np.array(query_embedding), k=3)
+    D, I = doc_index.search(np.array(query_embedding), k = 3)
     retrieved_chunks = [doc_chunks[i] for i in I[0]]
     context_text = "\n\n".join(retrieved_chunks)
 
     history_text = format_history(chat_history)
     prompt = (
         f"{base_prompt}\n{history_text}\n"
-        f"Use the following company documents to answer:\n"
+        f"Use the following company documents to answer and don't end the responce with any question or sentances like this If you need further assistance or have any other questions, feel free to let me know how I can help!:\n"
         f"{context_text}\nUser: {sentence}\nBot:"
     )
 
